@@ -17,3 +17,8 @@ Prior to using these methods, you must have installed postgres and used [shapefi
 Mainly for worldpop rasters per country. Gets list of country names for each shape file in db, then loops through them, importing the raster if exists, aggregating by highest level, admin and then drops raster.
 
 	node aggregate_country_specific_raster.js
+
+### Aggregate raster by all countries
+Imports raster and iterates though country shape files, aggregating by admin
+
+	node aggregate_raster_by_all_countries.js
