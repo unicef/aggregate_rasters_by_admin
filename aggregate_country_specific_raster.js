@@ -1,8 +1,8 @@
+// Mainly for worldpop rasters per country. Gets list of country names for each shape file in db,
+// then loops through them, importing the raster if exists, aggregating by highest level, admin and then drops raster.
+
 // node aggregate_country_specific_raster.js
 // aggregate_country_specific_rasters2.js -c true
-
-// Fetches table names for each country
-//
 
 var async = require('async');
 var bluebird = require('bluebird');
