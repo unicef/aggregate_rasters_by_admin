@@ -2,7 +2,6 @@
 // node aggregate_raster_by_all_countries.js --tif 2015.01.02.tif -s chirps -k precipitation -m mean
 var async = require('async');
 var bluebird = require('bluebird');
-var pg = require('pg');
 var fs = require('fs');
 var ArgumentParser = require('argparse').ArgumentParser;
 var exec = require('child_process').exec;
@@ -12,7 +11,9 @@ var mkdirp = require('mkdirp');
 var pg_config = config.pg_config;
 var save_to_dir = config.save_to_dir;
 var table_names = require('./lib/table_names');
-
+var countries_db = config.all_countries_one_db;
+const { Pool } = require('pg')
+var dbPool = new Pool(pg_config)
 var parser = new ArgumentParser({
   version: '0.0.1',
   addHelp: true,
@@ -98,7 +99,7 @@ exports.aggregate_raster_by_all_countries = (tif, tif_source, kind, sum_or_mean)
       // Drop table pop if exists
       function(callback) {
         // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
-        var command = 'psql all_countries_one_db -c "DROP TABLE IF EXISTS pop"';
+        var command = 'psql ' + countries_db +' -c "DROP TABLE IF EXISTS pop"';
         console.log(command);
         execute_command(command)
         .then(response => {
@@ -116,7 +117,7 @@ exports.aggregate_raster_by_all_countries = (tif, tif_source, kind, sum_or_mean)
         if (kind.match(/(aegypti|albopictus)/)) {
           path = config[kind].local
         }
-        var command = "raster2pgsql -Y -s 4326 -t 100x100 -I " + path + tif + ".tif pop | psql all_countries_one_db";
+        var command = "raster2pgsql -Y -s 4326 -t 100x100 -I " + path + tif + ".tif pop | psql " + countries_db;
         console.log(command);
         execute_command(command)
         .then(response => {
@@ -139,7 +140,7 @@ exports.aggregate_raster_by_all_countries = (tif, tif_source, kind, sum_or_mean)
 
       function(callback) {
         // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
-        var command = 'psql all_countries_one_db -c "DROP TABLE IF EXISTS pop"'
+        var command = 'psql ' + countries_db +' -c "DROP TABLE IF EXISTS pop"'
         execute_command(command)
         .then(response => {
           console.log(response);
@@ -164,58 +165,52 @@ function scan_raster(country, admin_table, tif,  kind, tif_source, sum_or_mean) 
   console.log('About to query...');
   var shp_source = admin_table.split('_')[admin_table.split('_').length-1];
   return new Promise((resolve, reject) => {
-    pg.connect(pg_config, (err, client, done) => {
-      var st = table_names.form_select_command(admin_table, shp_source, sum_or_mean);
-      console.log(st);
-      var query = client.query(st);
+    var st = table_names.form_select_command(admin_table, shp_source, sum_or_mean);
+    console.log(st);
+    dbPool.query(st)
+    .then(results => {
+      results = results.rows;
+      // var pop_sum = parseInt(results.reduce((s, r) => { return s + r.sum }, 0));
+       var kilo_sum = parseInt(results.reduce((s, r) => { return s + r.kilometers}, 0));
+       var results2 = results.map(e => { return e[sum_or_mean];});
 
-      // Stream results back one row at a time
-      query.on('row', (row) => {
-        results.push(row);
+       var sum = 0;
+       var amount = null;
+       results2.forEach(e => { if (e) { sum += e;}});
+
+       if (sum_or_mean === 'mean') {
+         var avg = 0;
+         if (sum) {
+           avg = sum/results2.length;
+         }
+         amount =  Math.ceil(avg * 100000) / 100000;
+       } else {
+         amount = sum;
+       }
+
+       // content = content + results.map(r => {return [file, r.sum || 0, r.dpto, r.wcolgen02_, 'col_0_' + r.dpto + '_' + r.wcolgen02_ + '_santiblanko'].join(" ") }).join("\n")
+       var path = save_to_dir + kind + '/' + tif_source + '/' + shp_source + '/';
+       if (kind.match(/precipitation/)) {
+         path += country + '/'
+       }
+       fs.writeFile(path  +
+       admin_table +
+       '^' + tif +
+       '^' + tif_source +
+       '^' + amount +
+       '^' + kilo_sum +
+       '.json',
+       JSON.stringify(results), (err) => {
+         if (err) {
+           console.log(err);
+           console.log('Please manually create this dir.');
+           process.exit();
+         }
+         console.log('done!', country, admin_table)
+        })
       });
-      // After all data is returned, close connection and return results
-      query.on('end', () => {
-       // var pop_sum = parseInt(results.reduce((s, r) => { return s + r.sum }, 0));
-        var kilo_sum = parseInt(results.reduce((s, r) => { return s + r.kilometers}, 0));
-        var results2 = results.map(e => { return e[sum_or_mean];});
-
-        var sum = 0;
-        var amount = null;
-        results2.forEach(e => { if (e) { sum += e;}});
-
-        if (sum_or_mean === 'mean') {
-          var avg = 0;
-          if (sum) {
-            avg = sum/results2.length;
-          }
-          amount =  Math.ceil(avg * 100000) / 100000;
-        } else {
-          amount = sum;
-        }
-
-        // content = content + results.map(r => {return [file, r.sum || 0, r.dpto, r.wcolgen02_, 'col_0_' + r.dpto + '_' + r.wcolgen02_ + '_santiblanko'].join(" ") }).join("\n")
-        var path = save_to_dir + kind + '/' + tif_source + '/' + shp_source + '/';
-        if (kind.match(/precipitation/)) {
-          path += country + '/'
-        }
-        fs.writeFile(path  +
-        admin_table +
-        '^' + tif +
-        '^' + tif_source +
-        '^' + amount +
-        '^' + kilo_sum +
-        '.json',
-        JSON.stringify(results), (err) => {
-          if (err) {
-            console.log(err);
-            console.log('Please manually create this dir.');
-            process.exit();
-          }
-          console.log('done!', country, admin_table)
-          done();
-          resolve();
-        });
-      });
-    });
-  })
+    })
+    .catch(error => {
+      reject(error)
+    })
 }
