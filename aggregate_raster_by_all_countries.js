@@ -148,7 +148,6 @@ aggregate_raster_by_all_countries = () => {
       function(callback) {
         db_queries.get_country_names(pg_config)
         .then(country_names => {
-          country_names = ['SLE']
           bluebird.each(country_names, (country, i) => {
             return process_country(country).then(() => {
             });
