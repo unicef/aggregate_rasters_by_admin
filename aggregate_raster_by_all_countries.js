@@ -30,6 +30,10 @@ parser.addArgument(
 );
 
 parser.addArgument(
+  ['-c', '--country'],
+  {help: 'Name of country to start with'}
+);
+parser.addArgument(
   ['-k', '--kind'],
   {help: 'population, egypti, or precipitation'}
 )
@@ -48,6 +52,8 @@ const args = parser.parseArgs();
 const tif = args.tif;
 const kind = args.kind;
 const tif_source = args.source;
+const start_country = args.country;
+let go_live = start_country ? false : true
 // var shapefile_source = args.shapefile;
 const sum_or_mean = args.sum_or_mean;
 
@@ -114,57 +120,62 @@ aggregate_raster_by_all_countries = () => {
   console.log('Processing', tif)
   return new Promise((resolve, reject) => {
     async.waterfall([
-      // Drop table pop if exists
-      function(callback) {
-        // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
-        let command = 'psql ' + countries_db +
-        ' -c "DROP TABLE IF EXISTS pop"';
-        execute_command(command)
-        .then(response => {
-          console.log(response);
-          callback();
-        });
-      },
-
-      // Import raster to database
-      function(callback) {
-        console.log('About to add', tif)
-        // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
-
-        let path = save_to_dir + kind + '/' + tif_source + '/';
-        if (kind.match(/(aegypti|albopictus)/)) {
-          path = config[kind].local
-        }
-        let command = 'raster2pgsql -Y -s 4326 -t 100x100 -I '
-        + path + tif + '.tif pop | psql ' + countries_db;
-        console.log(command);
-        execute_command(command)
-        .then(response => {
-          callback();
-        });
-      },
+      // // Drop table pop if exists
+      // function(callback) {
+      //   // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
+      //   let command = 'psql ' + countries_db +
+      //   ' -c "DROP TABLE IF EXISTS pop"';
+      //   execute_command(command)
+      //   .then(response => {
+      //     console.log(response);
+      //     callback();
+      //   });
+      // },
+      //
+      // // Import raster to database
+      // function(callback) {
+      //   console.log('About to add', tif)
+      //   // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
+      //
+      //   let path = save_to_dir + kind + '/' + tif_source + '/';
+      //   if (kind.match(/(aegypti|albopictus)/)) {
+      //     path = config[kind].local
+      //   }
+      //   let command = 'raster2pgsql -Y -s 4326 -t 100x100 -I '
+      //   + path + tif + '.tif pop | psql ' + countries_db;
+      //   console.log(command);
+      //   execute_command(command)
+      //   .then(response => {
+      //     callback();
+      //   });
+      // },
 
       // Retrieve list of country names
       function(callback) {
         db_queries.get_country_names(pg_config)
         .then(country_names => {
           bluebird.each(country_names, (country, i) => {
-            return process_country(country).then(() => {
-            });
+            if (start_country) {
+              if (start_country.match(country)) {
+                go_live = true;
+              }
+            }
+            console.log(country, go_live);
+            return go_live ? process_country(country) : null
           }, {concurrency: 1})
           .then(callback);
         });
       },
-      function(callback) {
-        // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
-        let command = 'psql ' + countries_db +
-        ' -c "DROP TABLE IF EXISTS pop"'
-        execute_command(command)
-        .then(response => {
-          console.log(response);
-          callback();
-        });
-      }
+      // function(callback) {
+      //   // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
+      //   let command = 'psql ' + countries_db +
+      //   ' -c "DROP TABLE IF EXISTS pop"'
+      //   execute_command(command)
+      //   .then(response => {
+      //     console.log(response);
+      //     callback();
+      //   });
+      // }
     ], function() {
       console.log('done!');
       resolve();
