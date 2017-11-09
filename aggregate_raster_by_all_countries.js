@@ -1,4 +1,6 @@
 // node aggregate_raster_by_all_countries.js -k aegypti --tif aegypti -s simon_hay -m mean -f gadm2-8
+// node aggregate_raster_by_all_countries.js -k population --tif ~/downloads/aedes_maps_public/aegypti.tif -s worldpop -m sum -f gadm2-8
+// node aggregate_raster_by_all_countries.js -k population --tif ../data/rasters/population/cub/CUB_ppp_v2b_2015_UNadj.tif -s worldpop -m sum -f gadm2-8
 // node aggregate_raster_by_all_countries.js --tif 2015.01.02.tif -s chirps -k precipitation -m mean
 const async = require('async');
 const bluebird = require('bluebird');
@@ -124,7 +126,7 @@ aggregate_raster_by_all_countries = () => {
       function(callback) {
         // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
         let command = 'psql ' + countries_db +
-        ' -c "DROP TABLE IF EXISTS pop"';
+        ' -c "DROP TABLE IF EXISTS raster_file"';
         execute_command(command)
         .then(response => {
           console.log(response);
@@ -137,12 +139,13 @@ aggregate_raster_by_all_countries = () => {
         console.log('About to add', tif)
         // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
 
-        let path = save_to_dir + kind + '/' + tif_source + '/';
-        if (kind.match(/(aegypti|albopictus)/)) {
-          path = config[kind].local
-        }
+        // let path = save_to_dir + kind + '/' + tif_source + '/';
+        // if (kind.match(/(aegypti|albopictus)/)) {
+        //   path = config[kind].local
+        // }
+
         let command = 'raster2pgsql -Y -s 4326 -t 100x100 -I '
-        + path + tif + '.tif pop | psql ' + countries_db;
+        + tif + ' raster_file | psql ' + countries_db;
         console.log(command);
         execute_command(command)
         .then(response => {
@@ -154,6 +157,7 @@ aggregate_raster_by_all_countries = () => {
       function(callback) {
         db_queries.get_country_names(pg_config)
         .then(country_names => {
+          country_names = ['CUB']
           bluebird.each(country_names, (country, i) => {
             if (start_country) {
               if (start_country.match(country)) {
@@ -166,16 +170,16 @@ aggregate_raster_by_all_countries = () => {
           .then(callback);
         });
       },
-      function(callback) {
-        // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
-        let command = 'psql ' + countries_db +
-        ' -c "DROP TABLE IF EXISTS pop"'
-        execute_command(command)
-        .then(response => {
-          console.log(response);
-          callback();
-        });
-      }
+      // function(callback) {
+      //   // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
+      //   let command = 'psql ' + countries_db +
+      //   ' -c "DROP TABLE IF EXISTS raster_file"'
+      //   execute_command(command)
+      //   .then(response => {
+      //     console.log(response);
+      //     callback();
+      //   });
+      // }
     ], function() {
       console.log('done!');
       resolve();
@@ -235,7 +239,7 @@ function group_by_admin(results) {
   });
   // Remove objects with no value
   results = results.reduce((h, r) => {
-    if (r.mean) {
+    // if (r.mean) {
       let ids = r.admin_id.match(/_[0-9_]+_/)[0]
       .replace(/^_/, '')
       .replace(/_$/, '')
@@ -247,7 +251,7 @@ function group_by_admin(results) {
         h[len] = {};
         h[len][r.admin_id] = r;
       }
-    }
+    // }
     return h
   }, {})
   return results
@@ -305,12 +309,18 @@ function save_set(admin_level, set) {
         return h;
       }, {})
     })
-
+    console.log(path +
+    country +
+    '^' +
+    admin_level +
+    '^' + tif_source +
+    '^' + amount +
+    '^' + kilo_sum +
+    '.json', "***");
      fs.writeFile(path +
      country +
      '^' +
      admin_level +
-     '^' + tif +
      '^' + tif_source +
      '^' + amount +
      '^' + kilo_sum +
@@ -335,6 +345,7 @@ function save_set(admin_level, set) {
 function save_sets(sets) {
   return new Promise((resolve, reject) => {
     bluebird.each(Object.keys(sets), set => {
+      console.log(set, 'UUUUU')
       return save_set(set, sets[set])
     }, {concurrency: 1})
     .then(resolve);
