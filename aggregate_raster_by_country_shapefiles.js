@@ -113,7 +113,7 @@ exports.aggregate_raster_by_all_country_shapefiles = (kind, country, tif, tif_so
         //   path = config[kind].local
         // }
 
-        let command = 'raster2pgsql -Y -s 4326 -I '
+        let command = 'raster2pgsql -Y -s 4326 -I -t 100x100 '
         + tif + ' raster_file | psql ' + countries_db;
         console.log(command);
         execute_command(command)
