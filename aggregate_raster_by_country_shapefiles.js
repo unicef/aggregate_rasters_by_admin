@@ -12,7 +12,7 @@ const pg_config = config.pg_config;
 const save_to_dir = config.save_to_dir;
 const db_queries = require('./lib/db_queries');
 const countries_db = config.pg_config.database;
-const shp_source = 'gadm2-8';
+
 const {Pool} = require('pg')
 const dbPool = new Pool(pg_config)
 
@@ -65,7 +65,7 @@ function process_country(country, kind, tif, tif_source, shapefile, sum_or_mean)
     mkdir(country, kind, tif_source, shapefile)
     .then(() => {
       bluebird.each([5, 4, 3, 2, 1], (admin_level, index) => {
-        return scan_raster(country, admin_level, shapefile, sum_or_mean);
+        return scan_raster(country, admin_level, shapefile, sum_or_mean, kind, tif_source);
       }, {concurrency: 1})
       .then(() => {
         console.log('XXXXX')
@@ -85,7 +85,7 @@ function process_country(country, kind, tif, tif_source, shapefile, sum_or_mean)
  * @param  {string} shapefile admin
  * @return{Promise} Fulfilled when all countries processed
  */
-exports.aggregate_raster_by_all_country_shapefiles = (kind, country, tif, tif_source, sum_or_mean, shapefile) => {
+exports.aggregate_raster_by_all_country_shapefiles = (kind, country, tif, tif_source, sum_or_mean, shp_source) => {
   console.log('Processing', tif)
   return new Promise((resolve, reject) => {
     async.waterfall([
@@ -227,7 +227,7 @@ function group_by_admin(results) {
  * @param{object} set - 3 letter country ISO code taken from wikipedia
  * @return{Promise} Fulfilled when country processed
  */
-function save_set(admin_level, set) {
+function save_set(admin_level, set, sum_or_mean, kind, tif_source, shp_source) {
   return new Promise((resolve, reject) => {
     // // var pop_sum = parseInt(results.reduce((s, r) => { return s + r.sum }, 0));
     let admin_ids = Object.keys(set);
@@ -300,11 +300,10 @@ function save_set(admin_level, set) {
  * @param{object} sets - 3 letter country ISO code taken from wikipedia
  * @return{Promise} Fulfilled when country processed
  */
-function save_sets(sets) {
+function save_sets(sets, sum_or_mean, kind, tif_source, shp_source) {
   return new Promise((resolve, reject) => {
     bluebird.each(Object.keys(sets), set => {
-      console.log(set, 'UUUUU')
-      return save_set(set, sets[set])
+      return save_set(set, sets[set], sum_or_mean, kind, tif_source, shp_source)
     }, {concurrency: 1})
     .then(resolve);
   })
@@ -316,7 +315,7 @@ function save_sets(sets) {
  * @param{String} admin_level - 0 through 5
  * @return{Promise} Fulfilled when country processed
  */
-function scan_raster(country, admin_level, shp_source, sum_or_mean) {
+function scan_raster(country, admin_level, shp_source, sum_or_mean, kind, tif_source) {
   console.log('About to query...***', country, admin_level, shp_source, sum_or_mean);
   return new Promise((resolve, reject) => {
     let st = db_queries.form_select_command(
@@ -328,7 +327,7 @@ function scan_raster(country, admin_level, shp_source, sum_or_mean) {
     .then(results => {
       results = results.rows;
       let sets = group_by_admin(results);
-      save_sets(sets)
+      save_sets(sets, sum_or_mean, kind, tif_source, shp_source)
       .then(resolve)
     })
     .catch(error => {
