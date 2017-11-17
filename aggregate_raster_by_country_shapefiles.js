@@ -273,14 +273,16 @@ function save_set(admin_level, set) {
         return h;
       }, {})
     })
-     fs.writeFile(path +
-     country +
-     '^' +
-     admin_level +
-     '^' + tif_source +
-     '^' + amount +
-     '^' + kilo_sum +
-     '.json',
+    let path_file = path +
+    country +
+    '^' +
+    admin_level +
+    '^' + tif_source +
+    '^' + amount +
+    '^' + kilo_sum +
+    '.json';
+    console.log(path_file);
+     fs.writeFile(path_file,
      JSON.stringify(set), (err) => {
        if (err) {
          console.log(err);
