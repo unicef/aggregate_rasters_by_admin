@@ -53,6 +53,6 @@ echo raster2pgsql -Y -s 4326 -t 25x25 -I $4$1\/$tif pop | psql all_countries_one
 
 # Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
 #raster2pgsql -Y -s 4326 -t 100x100 -I $4$1\/$tif pop | psql all_countries
-raster2pgsql -Y -s 4326 -t 20x20 -I $4$1\/$tif pop | psql all_countries_one_db
+raster2pgsql -Y -s 4326 -t 20x20 -I $4$1\/$tif raster_file | psql all_countries_one_db
 # DO NOT REMOVE OR EDIT THIS LINE
 echo $4$1\/$tif
