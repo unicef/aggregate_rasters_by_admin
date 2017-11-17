@@ -64,7 +64,7 @@ function process_country(country, kind, tif, tif_source, shapefile, sum_or_mean)
   return new Promise((resolve, reject) => {
     mkdir(country, kind, tif_source, shapefile)
     .then(() => {
-      bluebird.each([5, 4, 3, 2, 1], (admin_level, index) => {
+      bluebird.each([5, 4, 3, 2, 1, 0], (admin_level, index) => {
         return scan_raster(country, admin_level, shapefile, sum_or_mean, kind, tif_source);
       }, {concurrency: 1})
       .then(() => {
