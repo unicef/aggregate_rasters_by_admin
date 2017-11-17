@@ -118,7 +118,6 @@ exports.aggregate_raster_by_all_country_shapefiles = (kind, country, tif, tif_so
         console.log(command);
         execute_command(command)
         .then(response => {
-          process.exit();
           callback();
         });
       },
