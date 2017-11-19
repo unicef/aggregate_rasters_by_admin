@@ -113,7 +113,7 @@ exports.aggregate_raster_by_all_country_shapefiles = (kind, country, tif, tif_so
         //   path = config[kind].local
         // }
 
-        let command = 'raster2pgsql -Y -s 4326 -I -t 100x100 '
+        let command = 'raster2pgsql -Y -s 4326 -I -t 10x10 '
         + tif + ' raster_file | psql ' + countries_db;
         console.log(command);
         execute_command(command)
@@ -316,7 +316,8 @@ function save_sets(sets, sum_or_mean, kind, tif_source, shp_source) {
  * @return{Promise} Fulfilled when country processed
  */
 function scan_raster(country, admin_level, shp_source, sum_or_mean, kind, tif_source) {
-  console.log('About to query...***', country, admin_level, shp_source, sum_or_mean);
+  let start_time = Date.now();
+  console.log(start_time, 'About to query...***', country, admin_level, shp_source, sum_or_mean);
   return new Promise((resolve, reject) => {
     let st = db_queries.form_select_command(
       country, shp_source, sum_or_mean, admin_level
@@ -325,6 +326,7 @@ function scan_raster(country, admin_level, shp_source, sum_or_mean, kind, tif_so
 
     dbPool.query(st)
     .then(results => {
+      console.log('DONE!', ((Date.now - start_time)/1000), country, admin_level);
       results = results.rows;
       let sets = group_by_admin(results);
       save_sets(sets, sum_or_mean, kind, tif_source, shp_source)
