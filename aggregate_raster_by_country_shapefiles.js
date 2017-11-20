@@ -169,17 +169,17 @@ exports.aggregate_raster_by_all_country_shapefiles = (
         )
         .then(callback)
       },
-      // function(callback) {
-      //   // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
-      //   let command = 'psql ' + countries_db +
-      //   ' -c "DROP TABLE IF EXISTS raster_file"'
-      //   console.log(command)
-      //   execute_command(command)
-      //   .then(response => {
-      //     console.log(response);
-      //     callback();
-      //   });
-      // }
+      function(callback) {
+        // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
+        let command = 'psql ' + countries_db +
+        ' -c "DROP TABLE IF EXISTS raster_file"'
+        console.log(command)
+        execute_command(command)
+        .then(response => {
+          console.log(response);
+          callback();
+        });
+      }
     ], function() {
       console.log('done!');
       resolve();
