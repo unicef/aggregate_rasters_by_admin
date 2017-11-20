@@ -21,15 +21,21 @@ const dbPool = new Pool(pg_config)
 /**
  * Execute command
  * @param{String} country - country code
+ * @param{String} kind - kind
+ * @param{String} tif_source - tif_source
+ * @param{String} shp_source - shp_source
+ * @param{String} tile_dimensions - new_dir_name
  * @return{Promise} Fulfilled directory is created
  */
-function mkdir(country, kind, tif_source, shp_source) {
+function mkdir(country, kind, tif_source, shp_source, tile_dimensions) {
   return new Promise((resolve, reject) => {
     // if (kind.match(/precipitation/)) {
       // country, tif, kind, tif_source, sum_or_mean
-      mkdirp(save_to_dir + kind + '/' +
-      tif_source + '/' + shp_source + '/' +
-      country, (err) => {
+      let path_to_dir = save_to_dir + kind + '/' +
+      tif_source + '/' + shp_source + '/' + tile_dimensions;
+      console.log('About to mkdir', path_to_dir);
+      mkdirp.sync(path_to_dir);
+      mkdirp(path_to_dir + '/' + country, (err) => {
           if (err) console.error(err)
           else resolve();
       });
@@ -57,35 +63,62 @@ function execute_command(command) {
 
 /**
  * process_country
- * @param{String} country - 3 letter country ISO code taken from wikipedia
+ * @param  {string} country admin
+ * @param  {string} kind admin
+ * @param  {string} tif admin
+ * @param  {string} tif_source admin
+ * @param  {string} shp_source admin
+ * @param  {string} sum_or_mean admin
+ * @param  {string} tile_dimensions admin
  * @return{Promise} Fulfilled when all countries processed
  */
-function process_country(country, kind, tif, tif_source, shapefile, sum_or_mean) {
+function process_country(country,
+  kind,
+  tif,
+  tif_source,
+  shp_source,
+  sum_or_mean,
+  tile_dimensions
+) {
   return new Promise((resolve, reject) => {
-    mkdir(country, kind, tif_source, shapefile)
+    mkdir(country.toUpperCase(), kind, tif_source, shp_source, tile_dimensions)
     .then(() => {
       bluebird.each([5, 4, 3, 2, 1, 0], (admin_level, index) => {
-        return scan_raster(country, admin_level, shapefile, sum_or_mean, kind, tif_source);
+        return scan_raster(
+          country,
+          kind,
+          admin_level,
+          tif,
+          tif_source,
+          shp_source,
+          sum_or_mean,
+          tile_dimensions
+        );
       }, {concurrency: 1})
-      .then(() => {
-        console.log('XXXXX')
-        resolve();
-      })
+      .then(resolve)
     })
   })
 }
 
 /**
  * Aggregate raster by all countries
- * @param  {string} kind admin
  * @param  {string} country admin
+ * @param  {string} kind admin
  * @param  {string} tif admin
- * @param  {string} source admin
+ * @param  {string} tif_source admin
+ * @param  {string} shp_source admin
  * @param  {string} sum_or_mean admin
- * @param  {string} shapefile admin
+ * @param  {string} tile_dimensions admin
  * @return{Promise} Fulfilled when all countries processed
  */
-exports.aggregate_raster_by_all_country_shapefiles = (kind, country, tif, tif_source, sum_or_mean, shp_source) => {
+exports.aggregate_raster_by_all_country_shapefiles = (
+  country,
+  kind,
+  tif,
+  tif_source,
+  shp_source,
+  sum_or_mean,
+  tile_dimensions) => {
   console.log('Processing', tif)
   return new Promise((resolve, reject) => {
     async.waterfall([
@@ -113,8 +146,9 @@ exports.aggregate_raster_by_all_country_shapefiles = (kind, country, tif, tif_so
         //   path = config[kind].local
         // }
 
-        let command = 'raster2pgsql -Y -s 4326 -I -t 10x10 '
-        + tif + ' raster_file | psql ' + countries_db;
+        let command = 'raster2pgsql -Y -s 4326 -I -t ' +
+        tile_dimensions + ' ' +
+        tif + ' raster_file | psql ' + countries_db;
         console.log(command);
         execute_command(command)
         .then(response => {
@@ -124,20 +158,28 @@ exports.aggregate_raster_by_all_country_shapefiles = (kind, country, tif, tif_so
 
       // Retrieve list of country names
       function(callback) {
-        process_country(country, kind, tif, tif_source, shp_source, sum_or_mean)
+        process_country(
+          country,
+          kind,
+          tif,
+          tif_source,
+          shp_source,
+          sum_or_mean,
+          tile_dimensions
+        )
         .then(callback)
       },
-      function(callback) {
-        // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
-        let command = 'psql ' + countries_db +
-        ' -c "DROP TABLE IF EXISTS raster_file"'
-        console.log(command)
-        execute_command(command)
-        .then(response => {
-          console.log(response);
-          callback();
-        });
-      }
+      // function(callback) {
+      //   // Use EPSG:4326 SRS, tile into 100x100 squares, and create an index
+      //   let command = 'psql ' + countries_db +
+      //   ' -c "DROP TABLE IF EXISTS raster_file"'
+      //   console.log(command)
+      //   execute_command(command)
+      //   .then(response => {
+      //     console.log(response);
+      //     callback();
+      //   });
+      // }
     ], function() {
       console.log('done!');
       resolve();
@@ -223,11 +265,18 @@ function group_by_admin(results) {
 
 /**
  * save set
- * @param{number} admin_level - admin_level
- * @param{object} set - 3 letter country ISO code taken from wikipedia
+ * @param  {string} admin_level admin
+ * @param  {string} set admin
+ * @param  {string} kind admin
+ * @param  {string} tif admin
+ * @param  {string} tif_source admin
+ * @param  {string} shp_source admin
+ * @param  {string} sum_or_mean admin
+ * @param  {string} tile_dimensions admin
  * @return{Promise} Fulfilled when country processed
  */
-function save_set(admin_level, set, sum_or_mean, kind, tif_source, shp_source) {
+function save_set(admin_level, set, kind, tif,
+  tif_source, shp_source, sum_or_mean, tile_dimensions) {
   return new Promise((resolve, reject) => {
     // // var pop_sum = parseInt(results.reduce((s, r) => { return s + r.sum }, 0));
     let admin_ids = Object.keys(set);
@@ -262,7 +311,7 @@ function save_set(admin_level, set, sum_or_mean, kind, tif_source, shp_source) {
      let path = save_to_dir + kind + '/'
      + tif_source + '/' + shp_source + '/';
     //  if (kind.match(/precipitation/)) {
-       path += country + '/'
+       path += tile_dimensions + '/' + country + '/'
     //  }
 
     Object.keys(set).forEach(admin_id => {
@@ -273,10 +322,14 @@ function save_set(admin_level, set, sum_or_mean, kind, tif_source, shp_source) {
         return h;
       }, {})
     })
+
     let path_file = path +
     country +
     '^' +
     admin_level +
+    '^' +
+    tif.match(/([^\\/]+)(\.tif$)/)[1] +
+    '^' + tile_dimensions +
     '^' + tif_source +
     '^' + amount +
     '^' + kilo_sum +
@@ -297,13 +350,22 @@ function save_set(admin_level, set, sum_or_mean, kind, tif_source, shp_source) {
 
 /**
  * save sets
- * @param{object} sets - 3 letter country ISO code taken from wikipedia
+ * @param  {Object} sets
+ * @param  {string} kind
+ * @param  {string} tif
+ * @param  {string} tif_source
+ * @param  {string} shp_source
+ * @param  {string} sum_or_mean
+ * @param  {string} tile_dimensions
  * @return{Promise} Fulfilled when country processed
  */
-function save_sets(sets, sum_or_mean, kind, tif_source, shp_source) {
+function save_sets(sets,
+  kind, tif, tif_source, shp_source, sum_or_mean, tile_dimensions) {
   return new Promise((resolve, reject) => {
     bluebird.each(Object.keys(sets), set => {
-      return save_set(set, sets[set], sum_or_mean, kind, tif_source, shp_source)
+      return save_set(set, sets[set],
+        kind, tif, tif_source, shp_source,
+        sum_or_mean, tile_dimensions)
     }, {concurrency: 1})
     .then(resolve);
   })
@@ -311,14 +373,31 @@ function save_sets(sets, sum_or_mean, kind, tif_source, shp_source) {
 
 /**
  * scan_raster
- * @param{String} country - 3 letter country ISO code taken from wikipedia
- * @param{String} admin_level - 0 through 5
+ * @param  {string} country admin
+ * @param  {string} kind admin
+ * @param  {string} admin_level
+ * @param  {string} tif admin
+ * @param  {string} tif_source admin
+ * @param  {string} shp_source admin
+ * @param  {string} sum_or_mean admin
+ * @param  {string} tile_dimensions admin
  * @return{Promise} Fulfilled when country processed
  */
-function scan_raster(country, admin_level, shp_source, sum_or_mean, kind, tif_source) {
+function scan_raster(
+  country,
+  kind,
+  admin_level,
+  tif,
+  tif_source,
+  shp_source,
+  sum_or_mean,
+  tile_dimensions ) {
   let start_time = Date.now();
-  console.log(start_time, 'About to query...***', country, admin_level, shp_source, sum_or_mean);
+  console.log(start_time,
+    'About to query...***', country, admin_level, shp_source, sum_or_mean
+  );
   return new Promise((resolve, reject) => {
+    console.log(shp_source, '!!!!')
     let st = db_queries.form_select_command(
       country, shp_source, sum_or_mean, admin_level
     );
@@ -326,10 +405,16 @@ function scan_raster(country, admin_level, shp_source, sum_or_mean, kind, tif_so
 
     dbPool.query(st)
     .then(results => {
-      console.log('DONE!', ((Date.now - start_time)/1000), country, admin_level);
+      console.log('DONE!',
+      ((Date.now() - start_time)/1000),
+      country, admin_level);
       results = results.rows;
       let sets = group_by_admin(results);
-      save_sets(sets, sum_or_mean, kind, tif_source, shp_source)
+      save_sets(sets,
+        kind,
+        tif,
+        tif_source,
+        shp_source, sum_or_mean, tile_dimensions)
       .then(resolve)
     })
     .catch(error => {
